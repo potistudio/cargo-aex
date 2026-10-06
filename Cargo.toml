@@ -1,0 +1,13 @@
+[package]
+name = "cargo-aex"
+version = "0.1.0"
+edition = "2024"
+authors = ["potistudio <potistudio@proton.me>"]
+license = "MIT"
+publish = false
+
+[profile.release]
+codegen-units = 1
+lto = true
+
+[dependencies]
