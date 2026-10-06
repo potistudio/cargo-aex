@@ -11,3 +11,4 @@ codegen-units = 1
 lto = true
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
