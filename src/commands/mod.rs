@@ -12,9 +12,12 @@ use clap::CommandFactory;
 
 use crate::cli::{Cli, Command};
 
+pub(crate) use bundle::BundleArgs;
+
+/// Dispatch the selected subcommand.
 pub fn run(command: Command) -> ExitCode {
 	match command {
-		Command::Bundle => bundle::run(),
+		Command::Bundle(args) => bundle::run(*args),
 		Command::Install => install::run(),
 		Command::Uninstall => uninstall::run(),
 		Command::Inspect => inspect::run(),

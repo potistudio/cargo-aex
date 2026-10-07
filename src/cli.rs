@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
 
+use crate::commands::BundleArgs;
+
+/// Parsed CLI invocation.
 #[derive(Parser)]
 #[command(name = "cargo-aex", bin_name = "cargo aex", version, about = "Aex Cargo subcommands")]
 pub struct Cli {
@@ -7,18 +10,19 @@ pub struct Cli {
 	pub command: Command,
 }
 
+/// Available subcommands.
 #[derive(Subcommand)]
 pub enum Command {
-	/// Bundle an application.
-	Bundle,
+	/// Build and bundle After Effects plugins.
+	Bundle(Box<BundleArgs>),
 
-	/// Install an application.
+	/// Install an After Effects plugin.
 	Install,
 
-	/// Uninstall an application.
+	/// Uninstall an After Effects plugin.
 	Uninstall,
 
-	/// Inspect an application.
+	/// Inspect an After Effects plugin.
 	Inspect,
 
 	/// Check the development environment.
