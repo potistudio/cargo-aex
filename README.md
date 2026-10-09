@@ -112,3 +112,66 @@ The bundler uses Cargo's reported artifact filenames, including cached builds,
 and forwards compiler diagnostics. It stages each bundle before replacing its
 previous output, so build, resource, and signing failures preserve that plugin's
 existing bundle. A workspace run publishes plugins individually.
+
+## Install and uninstall plugins
+
+Run these commands from a Rust plugin project:
+
+```sh
+cargo aex install
+cargo aex install --release
+cargo aex uninstall
+```
+
+`install` builds and bundles the selected plugins, then creates symbolic links
+in Adobe's shared MediaCore directory:
+
+- macOS: `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`
+- Windows: `<Program Files>\Adobe\Common\Plug-ins\7.0\MediaCore\`
+
+Installation and removal require macOS or Windows. Installation accepts the
+same build, output, universal binary, and signing options as `bundle`. Only
+plugins for the host platform can be installed. Use `--install-dir` on both
+commands to select another plugin directory, such as a specific After Effects
+installation's `Plug-ins` folder. Relative paths are resolved from the current
+directory:
+
+```sh
+cargo aex install --install-dir "/path/to/Plug-ins"
+cargo aex uninstall --install-dir "/path/to/Plug-ins"
+cargo aex install -p my-plugin --release
+cargo aex uninstall -p my-plugin
+cargo aex install --workspace
+cargo aex uninstall --workspace
+```
+
+Both commands support `--manifest-path`, repeated `-p` / `--package`,
+`--workspace`, `--locked`, and `--offline`. Package selection and plugin names
+follow the same rules as `bundle`, including `[package.metadata.aex].name`.
+`--output-dir` selects the local bundle output, while `--install-dir` selects
+the installed link's location. Links use absolute paths, including when the
+bundle output directory is specified with a relative path.
+
+Installation stages a symbolic link before replacing an existing installation.
+Existing links, dangling links, and plugins copied by earlier versions are
+replaced. A failed link creation or publication preserves the previous
+installation. Plugins are installed individually in workspace runs. Unexpected
+plugin file types are rejected.
+
+After Effects loads the local bundle through the link, so bundling again to the
+same path updates the installed plugin. Keep that bundle directory available;
+moving or deleting it, including with `cargo clean`, breaks the installed link.
+
+`uninstall` reads Cargo metadata without building, so it also works when the
+plugin's source does not compile or build artifacts have been removed. It
+removes installed links without following them, leaves their targets in place,
+and also removes dangling links. Older installations containing real plugin
+files or directories are still supported. The command succeeds when a plugin
+is already absent. Keep the plugin's configured name unchanged until removal,
+since it determines the installed filename.
+
+Close After Effects before updating or removing loaded plugins. The chosen
+directory must be writable; the shared MediaCore directory may require
+administrator privileges. These commands do not request privilege elevation
+or invoke `sudo` automatically. On Windows, creating symbolic links requires
+Developer Mode or administrator privileges.

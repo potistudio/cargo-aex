@@ -14,20 +14,35 @@ use clap::Args;
 use plist::{Dictionary, Value};
 use serde::Deserialize;
 
-/// Options for the bundle command.
+/// Cargo package selection shared by bundling, installation, and removal.
 #[derive(Debug, Default, Args)]
-pub struct BundleArgs {
+pub(super) struct PackageArgs {
 	/// Path to the plugin or workspace Cargo.toml.
 	#[arg(long)]
 	manifest_path: Option<PathBuf>,
 
-	/// Packages to bundle by exact name; may be repeated.
+	/// Select packages by exact name; may be repeated.
 	#[arg(short, long, conflicts_with = "workspace")]
 	package: Vec<String>,
 
-	/// Bundle all cdylib packages in the workspace.
+	/// Select all cdylib packages in the workspace.
 	#[arg(long)]
 	workspace: bool,
+
+	/// Require an unchanged Cargo.lock.
+	#[arg(long)]
+	locked: bool,
+
+	/// Run Cargo offline.
+	#[arg(long)]
+	offline: bool,
+}
+
+/// Options for the bundle command.
+#[derive(Debug, Default, Args)]
+pub struct BundleArgs {
+	#[command(flatten)]
+	packages: PackageArgs,
 
 	/// Build with the release profile; macOS defaults to a universal binary.
 	#[arg(long, conflicts_with = "profile")]
@@ -68,14 +83,6 @@ pub struct BundleArgs {
 	/// Disable default Cargo features.
 	#[arg(long)]
 	no_default_features: bool,
-
-	/// Require an unchanged Cargo.lock.
-	#[arg(long)]
-	locked: bool,
-
-	/// Build offline; required Rust targets must already be installed.
-	#[arg(long)]
-	offline: bool,
 
 	/// Signing identity; defaults to Apple Development, then ad-hoc. Use `-` for ad-hoc.
 	#[arg(long, allow_hyphen_values = true, conflicts_with = "no_sign")]
@@ -137,7 +144,7 @@ impl Platform {
 pub fn run(args: BundleArgs) -> ExitCode {
 	let result = bundle(&args);
 	match result {
-		Ok(()) => ExitCode::SUCCESS,
+		Ok(_) => ExitCode::SUCCESS,
 		Err(error) => {
 			eprintln!("error: {error:#}");
 			ExitCode::FAILURE
@@ -150,8 +157,8 @@ fn cargo() -> Command {
 	Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
 }
 
-/// Build and bundle plugins for distribution.
-fn bundle(args: &BundleArgs) -> Result<()> {
+/// Read metadata without building so uninstall works even when the source cannot compile.
+fn load_metadata(args: &PackageArgs) -> Result<(Metadata, PathBuf)> {
 	let manifest = if let Some(path) = &args.manifest_path {
 		fs::canonicalize(path).with_context(|| format!("cannot find manifest {}", path.display()))?
 	} else {
@@ -182,7 +189,22 @@ fn bundle(args: &BundleArgs) -> Result<()> {
 		.other_options(metadata_options)
 		.exec()
 		.context("cannot read Cargo metadata")?;
-	let plugins = select_plugins(&metadata, &manifest, args)?;
+	Ok((metadata, manifest))
+}
+
+/// Resolve the same plugin names used by the bundler, without building.
+pub(super) fn plugin_names(args: &PackageArgs) -> Result<Vec<String>> {
+	let (metadata, manifest) = load_metadata(args)?;
+	Ok(select_plugins(&metadata, &manifest, args)?
+		.into_iter()
+		.map(|plugin| plugin.name)
+		.collect())
+}
+
+/// Build and bundle plugins for distribution, returning their published paths.
+pub(super) fn bundle(args: &BundleArgs) -> Result<Vec<PathBuf>> {
+	let (metadata, manifest) = load_metadata(&args.packages)?;
+	let plugins = select_plugins(&metadata, &manifest, &args.packages)?;
 	let primary = build_plugins(&manifest, &plugins, args, args.target.as_deref())?;
 	let universal = args.universal
 		|| (!args.no_universal
@@ -195,7 +217,7 @@ fn bundle(args: &BundleArgs) -> Result<()> {
 			primary.iter().all(|artifact| artifact.platform == Platform::MacOs),
 			"universal bundling requires macOS plugin artifacts"
 		);
-		ensure_macos_targets(args.offline)?;
+		ensure_macos_targets(args.packages.offline)?;
 		Some((
 			build_plugins(&manifest, &plugins, args, Some("x86_64-apple-darwin"))?,
 			build_plugins(&manifest, &plugins, args, Some("aarch64-apple-darwin"))?,
@@ -204,6 +226,7 @@ fn bundle(args: &BundleArgs) -> Result<()> {
 		None
 	};
 
+	let mut destinations = Vec::new();
 	for (index, plugin) in plugins.iter().enumerate() {
 		let output = args
 			.output_dir
@@ -226,9 +249,10 @@ fn bundle(args: &BundleArgs) -> Result<()> {
 		)?;
 
 		println!("Bundled {}", destination.display());
+		destinations.push(destination);
 	}
 
-	Ok(())
+	Ok(destinations)
 }
 
 /// The compiled library and the directory containing its generated bundle files.
@@ -274,8 +298,8 @@ fn build_plugins(
 	for (flag, enabled) in [
 		("--all-features", args.all_features),
 		("--no-default-features", args.no_default_features),
-		("--locked", args.locked),
-		("--offline", args.offline),
+		("--locked", args.packages.locked),
+		("--offline", args.packages.offline),
 	] {
 		if enabled {
 			command.arg(flag);
@@ -371,7 +395,7 @@ fn ensure_macos_targets(offline: bool) -> Result<()> {
 }
 
 /// Resolve the package selection and validate bundle settings and output names.
-fn select_plugins<'a>(metadata: &'a Metadata, manifest: &Path, args: &BundleArgs) -> Result<Vec<Plugin<'a>>> {
+fn select_plugins<'a>(metadata: &'a Metadata, manifest: &Path, args: &PackageArgs) -> Result<Vec<Plugin<'a>>> {
 	let members: Vec<_> = metadata
 		.packages
 		.iter()

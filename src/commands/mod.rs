@@ -1,5 +1,6 @@
 mod bench;
 mod bundle;
+mod deployment;
 mod doctor;
 mod inspect;
 mod install;
@@ -13,13 +14,15 @@ use clap::CommandFactory;
 use crate::cli::{Cli, Command};
 
 pub(crate) use bundle::BundleArgs;
+pub(crate) use install::InstallArgs;
+pub(crate) use uninstall::UninstallArgs;
 
 /// Dispatch the selected subcommand.
 pub fn run(command: Command) -> ExitCode {
 	match command {
 		Command::Bundle(args) => bundle::run(*args),
-		Command::Install => install::run(),
-		Command::Uninstall => uninstall::run(),
+		Command::Install(args) => install::run(*args),
+		Command::Uninstall(args) => uninstall::run(args),
 		Command::Inspect => inspect::run(),
 		Command::Doctor => doctor::run(),
 		Command::Test => test::run(),

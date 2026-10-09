@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::commands::BundleArgs;
+use crate::commands::{BundleArgs, InstallArgs, UninstallArgs};
 
 /// Parsed CLI invocation.
 #[derive(Parser)]
@@ -17,10 +17,10 @@ pub enum Command {
 	Bundle(Box<BundleArgs>),
 
 	/// Install an After Effects plugin.
-	Install,
+	Install(Box<InstallArgs>),
 
 	/// Uninstall an After Effects plugin.
-	Uninstall,
+	Uninstall(UninstallArgs),
 
 	/// Inspect an After Effects plugin.
 	Inspect,
