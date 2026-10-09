@@ -120,6 +120,7 @@ Run these commands from a Rust plugin project:
 ```sh
 cargo aex install
 cargo aex install --release
+cargo aex install --by-copy
 cargo aex uninstall
 ```
 
@@ -128,6 +129,20 @@ in Adobe's shared MediaCore directory:
 
 - macOS: `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`
 - Windows: `<Program Files>\Adobe\Common\Plug-ins\7.0\MediaCore\`
+
+By default, installation creates a link to each generated `.plugin` directory
+or `.aex` file. Specify `--by-copy` to install independent copies of
+those bundles in the installation directory:
+
+```sh
+cargo aex install --by-copy --release
+cargo aex install --by-copy --install-dir "/path/to/Plug-ins"
+```
+
+Copy mode preserves executable permissions and macOS signatures. Installed
+copies remain available after moving or deleting the local bundle directory,
+including with `cargo clean`. Run `install --by-copy` again to update
+them.
 
 Installation and removal require macOS or Windows. Installation accepts the
 same build, output, universal binary, and signing options as `bundle`. Only
@@ -149,14 +164,15 @@ Both commands support `--manifest-path`, repeated `-p` / `--package`,
 `--workspace`, `--locked`, and `--offline`. Package selection and plugin names
 follow the same rules as `bundle`, including `[package.metadata.aex].name`.
 `--output-dir` selects the local bundle output, while `--install-dir` selects
-the installed link's location. Links use absolute paths, including when the
+the installed plugin's location. Links use absolute paths, including when the
 bundle output directory is specified with a relative path.
 
-Installation stages a symbolic link before replacing an existing installation.
-Existing links, dangling links, and plugins copied by earlier versions are
-replaced. A failed link creation or publication preserves the previous
+Installation stages a symbolic link or complete copy before replacing an
+existing installation. Existing links, dangling links, and copies are replaced,
+so specifying or omitting `--by-copy` switches installation methods.
+A failed link creation, copy, or publication preserves the previous
 installation. Plugins are installed individually in workspace runs. Unexpected
-plugin file types are rejected.
+plugin file types are rejected; copy mode also rejects links inside a bundle.
 
 After Effects loads the local bundle through the link, so bundling again to the
 same path updates the installed plugin. Keep that bundle directory available;
@@ -165,13 +181,14 @@ moving or deleting it, including with `cargo clean`, breaks the installed link.
 `uninstall` reads Cargo metadata without building, so it also works when the
 plugin's source does not compile or build artifacts have been removed. It
 removes installed links without following them, leaves their targets in place,
-and also removes dangling links. Older installations containing real plugin
-files or directories are still supported. The command succeeds when a plugin
-is already absent. Keep the plugin's configured name unchanged until removal,
-since it determines the installed filename.
+and also removes dangling links. Copied plugin files or directories are removed
+as well; removal does not require an installation method. The command succeeds
+when a plugin is already absent. Keep the plugin's configured name unchanged
+until removal, since it determines the installed filename.
 
 Close After Effects before updating or removing loaded plugins. The chosen
 directory must be writable; the shared MediaCore directory may require
 administrator privileges. These commands do not request privilege elevation
 or invoke `sudo` automatically. On Windows, creating symbolic links requires
-Developer Mode or administrator privileges.
+Developer Mode or administrator privileges; `--by-copy` only
+requires write access to the installation directory.

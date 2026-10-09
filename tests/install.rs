@@ -133,6 +133,35 @@ fn installs_updates_and_uninstalls_without_building() {
 }
 
 #[test]
+fn switches_between_links_and_copies_and_uninstalls_after_cleaning() {
+	let project = fixture();
+	let directory = project.path().join("installed");
+	let installed = plugin_path(&directory, "日本語 Effect");
+	let bundled = plugin_path(&project.path().join("target/debug/bundle"), "日本語 Effect");
+	success(run(project.path(), "install", &directory, &["--no-sign"]));
+	assert!(fs::symlink_metadata(&installed).unwrap().file_type().is_symlink());
+	success(run(project.path(), "install", &directory, &["--by-copy", "--no-sign"]));
+	assert!(!fs::symlink_metadata(&installed).unwrap().file_type().is_symlink());
+	let binary = binary_path(&installed, "日本語 Effect");
+	let original = fs::read(&binary).unwrap();
+	fs::write(binary_path(&bundled, "日本語 Effect"), "changed bundle").unwrap();
+	assert_eq!(fs::read(&binary).unwrap(), original);
+	success(run(project.path(), "install", &directory, &["--no-sign"]));
+	assert!(fs::symlink_metadata(&installed).unwrap().file_type().is_symlink());
+	success(run(project.path(), "install", &directory, &["--by-copy", "--no-sign"]));
+	if cfg!(target_os = "macos") {
+		fs::write(installed.join("Contents/stale"), "old file").unwrap();
+	}
+	success(run(project.path(), "install", &directory, &["--by-copy", "--no-sign"]));
+	assert!(!installed.join("Contents/stale").exists());
+	fs::remove_dir_all(project.path().join("target")).unwrap();
+	assert_eq!(fs::read(&binary).unwrap(), original);
+	success(run(project.path(), "uninstall", &directory, &[]));
+	assert!(fs::symlink_metadata(&installed).is_err());
+	assert!(!project.path().join("target").exists());
+}
+
+#[test]
 fn honors_manifest_profile_features_and_relative_directories() {
 	let project = fixture();
 	let caller = tempdir().unwrap();
@@ -217,27 +246,29 @@ fn selects_workspace_packages_for_installation_and_removal() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn linked_signature_verifies_and_uninstall_preserves_bundle() {
+fn installed_signatures_verify_for_links_and_copies() {
 	let project = fixture();
 	let directory = project.path().join("installed");
-	success(run(project.path(), "install", &directory, &["--sign", "-"]));
 	let installed = plugin_path(&directory, "日本語 Effect");
-	success(
-		Command::new("codesign")
-			.args(["--verify", "--strict", "--all-architectures"])
-			.arg(&installed)
-			.output()
-			.unwrap(),
-	);
-	let bundled = fs::read_link(&installed).unwrap();
-	success(run(project.path(), "uninstall", &directory, &[]));
-	assert!(fs::symlink_metadata(&installed).is_err());
-	assert!(bundled.join("Contents/MacOS/日本語 Effect").is_file());
-	success(
-		Command::new("codesign")
-			.args(["--verify", "--strict", "--all-architectures"])
-			.arg(&bundled)
-			.output()
-			.unwrap(),
-	);
+	let bundled = plugin_path(&project.path().join("target/debug/bundle"), "日本語 Effect");
+	for arguments in [&["--sign", "-"][..], &["--sign", "-", "--by-copy"][..]] {
+		success(run(project.path(), "install", &directory, arguments));
+		success(
+			Command::new("codesign")
+				.args(["--verify", "--strict", "--all-architectures"])
+				.arg(&installed)
+				.output()
+				.unwrap(),
+		);
+		success(run(project.path(), "uninstall", &directory, &[]));
+		assert!(fs::symlink_metadata(&installed).is_err());
+		assert!(bundled.join("Contents/MacOS/日本語 Effect").is_file());
+		success(
+			Command::new("codesign")
+				.args(["--verify", "--strict", "--all-architectures"])
+				.arg(&bundled)
+				.output()
+				.unwrap(),
+		);
+	}
 }
