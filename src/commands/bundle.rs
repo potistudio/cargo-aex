@@ -17,7 +17,7 @@ use serde::Deserialize;
 /// Cargo package selection shared by bundling, installation, and removal.
 #[derive(Debug, Default, Args)]
 pub(super) struct PackageArgs {
-	/// Path to the plugin or workspace Cargo.toml.
+	/// Path to the Cargo.toml of a plugin package or workspace.
 	#[arg(long)]
 	manifest_path: Option<PathBuf>,
 

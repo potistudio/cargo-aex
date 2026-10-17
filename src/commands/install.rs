@@ -1,4 +1,4 @@
-//! Builds and bundles plugins, then links or copies them into After Effects' plugin directory.
+//! Links or copies prebuilt or locally built plugins into After Effects' plugin directory.
 
 use std::{
 	fs,
@@ -16,6 +16,15 @@ use super::{
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {
+	/// Prebuilt .plugin directory or .aex file to install without building.
+	#[arg(value_name = "PLUGIN", conflicts_with_all = [
+		"manifest_path", "package", "workspace", "locked", "offline",
+		"release", "profile", "target", "universal", "no_universal",
+		"target_dir", "output_dir", "features", "all_features",
+		"no_default_features", "sign", "no_sign",
+	])]
+	plugin: Option<PathBuf>,
+
 	#[command(flatten)]
 	bundle: BundleArgs,
 
@@ -41,7 +50,11 @@ pub fn run(args: InstallArgs) -> ExitCode {
 fn install(args: &InstallArgs) -> Result<()> {
 	let directory = deployment::install_directory(args.install_dir.as_deref())?;
 	let extension = deployment::plugin_extension()?;
-	let bundles = bundle::bundle(&args.bundle)?;
+	let bundles = if let Some(plugin) = &args.plugin {
+		vec![plugin.clone()]
+	} else {
+		bundle::bundle(&args.bundle)?
+	};
 	// Check every bundle before installing any plugins into the host application.
 	for source in &bundles {
 		ensure!(
@@ -49,7 +62,7 @@ fn install(args: &InstallArgs) -> Result<()> {
 			"cannot install {} on this host; expected a .{extension} plugin",
 			source.display()
 		);
-		deployment::plugin_metadata(source)?.context("built plugin is missing")?;
+		deployment::plugin_metadata(source)?.context("source plugin is missing")?;
 		deployment::plugin_metadata(&directory.join(source.file_name().unwrap()))?;
 	}
 	fs::create_dir_all(&directory).with_context(|| {
@@ -173,6 +186,45 @@ fn link_plugin(source: &Path, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use clap::Parser;
+
+	#[derive(Debug, Parser)]
+	struct InstallCli {
+		#[command(flatten)]
+		args: InstallArgs,
+	}
+
+	#[test]
+	fn prebuilt_plugin_conflicts_with_every_build_option() {
+		for arguments in [
+			vec!["--manifest-path", "Cargo.toml"],
+			vec!["-p", "effect"],
+			vec!["--workspace"],
+			vec!["--locked"],
+			vec!["--offline"],
+			vec!["--release"],
+			vec!["--profile", "debug"],
+			vec!["--target", "aarch64-apple-darwin"],
+			vec!["--universal"],
+			vec!["--no-universal"],
+			vec!["--target-dir", "target"],
+			vec!["--output-dir", "dist"],
+			vec!["--features", "feature"],
+			vec!["--all-features"],
+			vec!["--no-default-features"],
+			vec!["--sign", "-"],
+			vec!["--no-sign"],
+		] {
+			let error =
+				InstallCli::try_parse_from(["install", "Effect.plugin"].into_iter().chain(arguments)).unwrap_err();
+			assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+		}
+		assert!(
+			InstallCli::try_parse_from(["install", "Effect.plugin", "--by-copy", "--install-dir", "installed",])
+				.is_ok()
+		);
+		assert!(InstallCli::try_parse_from(["install"]).is_ok());
+	}
 
 	#[test]
 	fn copied_windows_plugin_is_independent_of_source() {

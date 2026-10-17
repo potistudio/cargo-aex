@@ -91,6 +91,56 @@ fn binary_path(plugin: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+fn installs_prebuilt_plugins_without_a_cargo_project() {
+	let root = tempdir().unwrap();
+	let source = plugin_path(root.path(), "Prebuilt Effect");
+	let binary = binary_path(&source, "Prebuilt Effect");
+	fs::create_dir_all(binary.parent().unwrap()).unwrap();
+	fs::write(&binary, b"prebuilt binary").unwrap();
+	let installed = plugin_path(&root.path().join("installed"), "Prebuilt Effect");
+	let run_prebuilt = |source: &Path, copy: bool| {
+		let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-aex"));
+		command
+			.current_dir(root.path())
+			// Direct installation must not invoke Cargo at all.
+			.env("CARGO", root.path().join("nonexistent-cargo"))
+			.args(["aex", "install", "--install-dir", "installed"])
+			.arg(source);
+		if copy {
+			command.arg("--by-copy");
+		}
+		command.output().unwrap()
+	};
+	let relative = source.strip_prefix(root.path()).unwrap();
+	success(run_prebuilt(relative, false));
+	assert_eq!(fs::read_link(&installed).unwrap(), fs::canonicalize(&source).unwrap());
+	success(run_prebuilt(relative, true));
+	assert!(!fs::symlink_metadata(&installed).unwrap().file_type().is_symlink());
+	fs::write(&binary, b"updated source").unwrap();
+	let installed_binary = binary_path(&installed, "Prebuilt Effect");
+	assert_eq!(fs::read(&installed_binary).unwrap(), b"prebuilt binary");
+
+	let missing = plugin_path(root.path(), "missing");
+	assert!(!run_prebuilt(&missing, false).status.success());
+	let wrong_platform = root.path().join(if cfg!(target_os = "macos") {
+		"Other.aex"
+	} else {
+		"Other.plugin"
+	});
+	assert!(!run_prebuilt(&wrong_platform, false).status.success());
+	let invalid = plugin_path(root.path(), "invalid");
+	if cfg!(target_os = "macos") {
+		fs::write(&invalid, b"not a bundle directory").unwrap();
+	} else {
+		fs::create_dir(&invalid).unwrap();
+	}
+	assert!(!run_prebuilt(&invalid, true).status.success());
+	assert_eq!(fs::read(&installed_binary).unwrap(), b"prebuilt binary");
+	assert!(!root.path().join("Cargo.lock").exists());
+	assert!(!root.path().join("target").exists());
+}
+
+#[test]
 fn installs_updates_and_uninstalls_without_building() {
 	let project = fixture();
 	let directory = project.path().join("installed plugins");

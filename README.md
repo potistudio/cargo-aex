@@ -124,8 +124,9 @@ cargo aex install --by-copy
 cargo aex uninstall
 ```
 
-`install` builds and bundles the selected plugins, then creates symbolic links
-in the latest installed After Effects application's `Plug-ins` directory:
+Without a positional argument, `install` builds and bundles the selected plugins,
+then creates symbolic links in the latest installed After Effects application's
+`Plug-ins` directory:
 
 - macOS: `/Applications/Adobe After Effects <version>/Plug-ins/`
 - Windows: `<Program Files>\Adobe\Adobe After Effects <version>\Support Files\Plug-ins\`
@@ -134,8 +135,21 @@ Both `install` and `uninstall` select the newest available version, excluding
 beta installations. If After Effects cannot be found, specify `--install-dir`.
 Use that option to pin a particular installation when multiple versions exist.
 
-By default, installation creates a link to each generated `.plugin` directory
-or `.aex` file. Specify `--by-copy` to install independent copies of
+To install an already built plugin, pass its path as a positional argument:
+
+```sh
+cargo aex install ./MyPlugin.plugin
+cargo aex install ./MyPlugin.aex --by-copy
+```
+
+This mode requires no Cargo project and does not build, bundle, or sign the
+plugin. On macOS, pass a `.plugin` bundle directory; on Windows, pass an `.aex`
+file. `--install-dir` and `--by-copy` work in both modes. A positional plugin
+path cannot be combined with package selection, build, output, or signing
+options (including `--locked` and `--offline`).
+
+By default, installation creates a link to each generated or supplied `.plugin`
+directory or `.aex` file. Specify `--by-copy` to install independent copies of
 those bundles in the installation directory:
 
 ```sh
@@ -164,9 +178,11 @@ cargo aex install --workspace
 cargo aex uninstall --workspace
 ```
 
-Both commands support `--manifest-path`, repeated `-p` / `--package`,
-`--workspace`, `--locked`, and `--offline`. Package selection and plugin names
-follow the same rules as `bundle`, including `[package.metadata.aex].name`.
+When installing from source or uninstalling, both commands support
+`--manifest-path` (a plugin package's or workspace's `Cargo.toml`), repeated
+`-p` / `--package`, `--workspace`, `--locked`, and `--offline`. Package selection
+and plugin names follow the same rules as `bundle`, including
+`[package.metadata.aex].name`.
 `--output-dir` selects the local bundle output, while `--install-dir` selects
 the installed plugin's location. Links use absolute paths, including when the
 bundle output directory is specified with a relative path.
