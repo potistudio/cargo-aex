@@ -15,7 +15,7 @@ pub struct UninstallArgs {
 	#[command(flatten)]
 	packages: PackageArgs,
 
-	/// Plugin installation directory; defaults to Adobe's shared MediaCore directory.
+	/// Plugin installation directory; defaults to the latest After Effects application's Plug-ins.
 	#[arg(long)]
 	install_dir: Option<PathBuf>,
 }

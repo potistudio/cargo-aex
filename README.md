@@ -125,10 +125,14 @@ cargo aex uninstall
 ```
 
 `install` builds and bundles the selected plugins, then creates symbolic links
-in Adobe's shared MediaCore directory:
+in the latest installed After Effects application's `Plug-ins` directory:
 
-- macOS: `/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`
-- Windows: `<Program Files>\Adobe\Common\Plug-ins\7.0\MediaCore\`
+- macOS: `/Applications/Adobe After Effects <version>/Plug-ins/`
+- Windows: `<Program Files>\Adobe\Adobe After Effects <version>\Support Files\Plug-ins\`
+
+Both `install` and `uninstall` select the newest available version, excluding
+beta installations. If After Effects cannot be found, specify `--install-dir`.
+Use that option to pin a particular installation when multiple versions exist.
 
 By default, installation creates a link to each generated `.plugin` directory
 or `.aex` file. Specify `--by-copy` to install independent copies of
@@ -147,7 +151,7 @@ them.
 Installation and removal require macOS or Windows. Installation accepts the
 same build, output, universal binary, and signing options as `bundle`. Only
 plugins for the host platform can be installed. Use `--install-dir` on both
-commands to select another plugin directory, such as a specific After Effects
+commands to select another plugin directory or a specific After Effects
 installation's `Plug-ins` folder. Relative paths are resolved from the current
 directory:
 
@@ -187,7 +191,7 @@ when a plugin is already absent. Keep the plugin's configured name unchanged
 until removal, since it determines the installed filename.
 
 Close After Effects before updating or removing loaded plugins. The chosen
-directory must be writable; the shared MediaCore directory may require
+directory must be writable; the application's `Plug-ins` directory may require
 administrator privileges. These commands do not request privilege elevation
 or invoke `sudo` automatically. On Windows, creating symbolic links requires
 Developer Mode or administrator privileges; `--by-copy` only
